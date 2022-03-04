@@ -1,0 +1,29 @@
+function R=TCNT_int_geom(R,ind,n)
+m=ind(1);g1=ind(2);gm=ind(3);z=ind(4);
+R=bsxfun(@minus,R,[z/2 g1/2]);
+y=R(:,2);
+R_cyl=zeros(size(R,1),3);
+R_cyl(:,2)=R(:,1)/z/n*2*pi;
+ind_g1=y<g1/2&y>-g1;
+ind_mu=y>=g1/2&y<=g1/2+m;
+ind_gm=y>g1/2+m&y<g1/2+m+gm;
+ind_ml=y>=g1/2+m+gm;
+ind_ml2=y<-g1/2;
+R_cyl(ind_g1,1)=n*z/2/pi;
+R_cyl(ind_g1,3)=R(ind_g1,2);
+R_cyl(ind_mu,1)=(R(ind_mu,2)-g1/2+z)*n/2/pi;
+R_cyl(ind_mu,3)=(R(ind_mu,2)-g1/2)/m*(gm-g1)/2+g1/2+...
+                m/2*sin((R(ind_mu,2)-g1/2)/m*pi);
+R_cyl(ind_gm,1)=n*(z+m)/2/pi;
+R_cyl(ind_gm,3)=g1/2+m+gm/2-R(ind_gm,2);
+R_cyl(ind_ml,1)=(z-R(ind_ml,2)+g1/2+m*2+gm)*n/2/pi;
+R_cyl(ind_ml,3)=(g1/2+m*2+gm-R(ind_ml,2))/m*(g1-gm)/2-g1/2-...
+                m/2*sin((R(ind_ml,2)-g1/2-m-gm)/m*pi);
+R_cyl(ind_ml2,1)=(z-R(ind_ml2,2)-g1/2)*n/2/pi;
+R_cyl(ind_ml2,3)=(-g1/2-R(ind_ml2,2))/m*(g1-gm)/2-g1/2-...
+                m/2*sin((R(ind_ml2,2)+g1/2+m)/m*pi);
+R_xyz(:,1)=R_cyl(:,1).*cos(R_cyl(:,2));
+R_xyz(:,2)=R_cyl(:,1).*sin(R_cyl(:,2));
+R_xyz(:,3)=R_cyl(:,3);
+R=sym_Cn(R_xyz,n);
+end

@@ -1,0 +1,2 @@
+The predicted results based on random forest algorithm is as follow:Stress = 10.596432782734725 GPa
+Strain =  0.6329027533044325

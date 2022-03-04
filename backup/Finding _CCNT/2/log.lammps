@@ -1,0 +1,391 @@
+LAMMPS (31 May 2019)
+OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (../comm.cpp:88)
+  using 1 OpenMP thread(s) per MPI task
+package omp 0
+using multi-threaded neighbor list subroutines
+package omp 6
+set 6 OpenMP thread(s) per MPI task
+using multi-threaded neighbor list subroutines
+#input file for Optimization of CCNT structures
+
+units		metal
+dimension	3
+boundary	f f p
+atom_style	atomic
+atom_modify   map array
+# ----------------------- ATOM AND GROUP DEFINITION ----------------------------
+read_data	data.cnt
+  orthogonal box = (-33.6 -33.6 -96.1) to (33.6 33.6 81.5)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  660 atoms
+  read_data CPU = 0.0010966 secs
+
+mass		1 12.01115
+
+#creating the upper group
+variable 	zmid equal xcm(all,z) #evaluating the z coordinate of the center of mass of the all atoms
+variable    zu atom "z>v_zmid" #atoms that their z coordinates are bigger than mid
+group       upz variable zu # now all those atoms are in the group "upz"
+331 atoms in group upz
+
+variable	idu equal 0.906*atoms
+variable    idup atom "id>v_idu" #atoms that their ID is bigger than .906*ntot
+group       upid variable idup # now all those atoms are in the group
+63 atoms in group upid
+
+group		up intersect upz upid
+44 atoms in group up
+
+
+#creating the lower group
+variable    zl atom "z<v_zmid" #atoms that their z coordinates are smaller than mid
+group       lowz variable zl # now all those atoms are in the group "lowz"
+329 atoms in group lowz
+
+variable	idl equal 0.805*atoms
+variable    idlow atom "id>v_idl" #atoms that their ID is bigger than .805*ntot
+group       lowid variable idlow # now all those atoms are in the group
+129 atoms in group lowid
+
+group		low intersect lowz lowid
+44 atoms in group low
+
+
+#creating the middle group
+
+group		middle subtract all up low
+572 atoms in group middle
+variable	n equal count(middle)
+
+# ------------------------ FORCE FIELDS ------------------------------
+pair_style   airebo 3.0
+pair_coeff   * * CH.airebo C
+Reading potential file CH.airebo with DATE: 2011-10-25
+
+
+# ------------------------- SETTINGS ---------------------------------
+timestep   0.0005
+run_style verlet
+
+#--------------------------RELAXATION---------------------------------
+variable	timestep  equal "step"
+variable	potentialenergy  equal "pe"
+variable    V0 equal "8.9*v_n"
+
+#computing the length of the ccnt during the simulation
+compute		max middle reduce max z
+compute		min middle reduce min z
+variable    L equal "c_max-c_min"
+
+#computing the max z for halt 3
+
+compute		maxz all reduce max z
+
+variable zhi equal 8.147564e+01
+
+variable stop3 equal "v_zhi-c_maxz"
+
+fix   1 all npt temp  300 300 0.05 z 0 0 0.5
+fix   2 up setforce 0.0 0.0 0.0
+fix   3 low setforce 0.0 0.0 0.0
+
+
+
+thermo 	100
+thermo_style	custom  step v_L  pe temp v_n
+
+#-------------------------computing stress--------------------
+compute     Sz middle stress/atom NULL virial
+fix			S middle ave/atom 10 1 10 c_Sz[3]
+compute		Szz middle reduce sum f_S
+
+variable	Stress equal "c_Szz/(10000*v_V0)"
+
+#coloring atoms regarding their stress
+compute     stressperatom middle stress/atom NULL
+variable    color atom "c_stressperatom[3]/89000"
+
+
+fix   4 all print 10 "${timestep} ${potentialenergy}" file pe_time_relaxation.txt screen no
+#dump  1 all custom 100 dump.lammpstrj id type x y z v_color
+dump  1 all custom/gz 100 dump.gz id type x y z v_color
+
+run		5000
+Last active /omp style is pair_style airebo/omp
+Neighbor list info ...
+  update every 1 steps, delay 10 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 12.2
+  ghost atom cutoff = 12.2
+  binsize = 6.1, bins = 12 12 30
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair airebo/omp, perpetual
+      attributes: full, newton on, ghost, omp
+      pair build: full/bin/ghost/omp
+      stencil: full/ghost/bin/3d
+      bin: standard
+Per MPI rank memory allocation (min/avg/max) = 12.9 | 12.9 | 12.9 Mbytes
+Step v_L PotEng Temp v_n 
+       0    87.509537    -4654.718            0          572 
+     100    83.276082   -4681.1054    176.11668          572 
+     200    84.504218   -4678.4059    196.32628          572 
+     300    83.373214   -4676.9946    223.06589          572 
+     400    84.731593   -4681.5517    337.70506          572 
+     500    84.332656   -4673.9852    303.29855          572 
+     600    83.893767   -4673.4144    324.74591          572 
+     700    84.342316   -4675.8267    358.81578          572 
+     800    83.883543   -4673.1263    312.68824          572 
+     900    84.520737   -4678.1645    352.34831          572 
+    1000    83.779038   -4677.2195    329.65239          572 
+    1100    84.401861   -4673.6027    295.44359          572 
+    1200    83.980118   -4672.7333    300.67361          572 
+    1300    84.491909   -4670.2784    287.17084          572 
+    1400    83.938976   -4672.3784    305.05573          572 
+    1500     84.28453   -4673.5812     301.3576          572 
+    1600    84.065447   -4674.0131    297.64745          572 
+    1700    84.309157   -4674.2398    302.60903          572 
+    1800    83.924616    -4674.013    315.96904          572 
+    1900    84.420654   -4670.4978    279.50644          572 
+    2000    84.076044   -4673.4723    319.34221          572 
+    2100     84.35477   -4672.4931    294.49507          572 
+    2200    83.953936   -4673.6257    297.75998          572 
+    2300    84.268559   -4674.2367    302.36343          572 
+    2400    84.164844   -4672.4983    292.25381          572 
+    2500    84.288549   -4672.6402    306.71798          572 
+    2600    84.076033   -4672.0759     303.5338          572 
+    2700    84.233328    -4672.699    297.13332          572 
+    2800     84.25165   -4674.5605    299.30694          572 
+    2900    84.115611   -4675.2302    308.40567          572 
+    3000    84.188766   -4672.5644    288.50848          572 
+    3100    84.271773   -4673.7661    309.47272          572 
+    3200    84.187315   -4673.9805    315.72512          572 
+    3300    84.383721   -4672.7036    297.86945          572 
+    3400    84.075521   -4673.8302    302.44182          572 
+    3500     84.21264   -4673.6195    286.69811          572 
+    3600    84.348716   -4674.2345    297.20639          572 
+    3700    84.198868   -4671.5072    287.32399          572 
+    3800    84.398977   -4671.6125    297.14032          572 
+    3900     84.08495   -4672.6517    306.06992          572 
+    4000    84.352893   -4673.7464    304.75294          572 
+    4100    84.152753    -4674.104    291.27903          572 
+    4200     84.36769   -4674.9459    279.98743          572 
+    4300    84.009002    -4674.498    273.61381          572 
+    4400    84.479101   -4674.1068    297.27849          572 
+    4500    84.140994   -4673.1262    300.75896          572 
+    4600    84.204024   -4671.9097    299.22694          572 
+    4700    84.234043   -4672.6311    311.32772          572 
+    4800    84.223756   -4672.3377    289.81276          572 
+    4900    84.288117   -4673.0745    287.15772          572 
+    5000    84.097944    -4672.874     288.8415          572 
+Loop time of 12.8117 on 6 procs for 5000 steps with 660 atoms
+
+Performance: 16.860 ns/day, 1.424 hours/ns, 390.269 timesteps/s
+401.0% CPU use with 1 MPI tasks x 6 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 10.748     | 10.748     | 10.748     |   0.0 | 83.89
+Neigh   | 0.0049706  | 0.0049706  | 0.0049706  |   0.0 |  0.04
+Comm    | 0.0026771  | 0.0026771  | 0.0026771  |   0.0 |  0.02
+Output  | 0.30478    | 0.30478    | 0.30478    |   0.0 |  2.38
+Modify  | 1.7246     | 1.7246     | 1.7246     |   0.0 | 13.46
+Other   |            | 0.02666    |            |       |  0.21
+
+Nlocal:    660 ave 660 max 660 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+FullNghs:  102078 ave 102078 max 102078 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 102078
+Ave neighs/atom = 154.664
+Neighbor list builds = 15
+Dangerous builds = 3
+
+
+unfix 1
+unfix 2
+unfix 3
+unfix 4
+
+
+variable	L0 equal $L
+variable	L0 equal 84.0979435379058
+variable	Strain equal "(v_L-v_L0)/v_L0"
+
+
+#-----------------------Calculation Force-Displacment----------------------
+
+compute     force up property/atom fx fy fz
+fix         6 all ave/atom 10 10 100 c_force[3]
+compute     fz3 up reduce sum f_6
+variable    Force  equal "c_fz3*(-1.602)"
+
+variable	Displacement  equal "(v_L-v_L0)/10"
+
+#emposing force that produce a strain rate of 10^10 1/s (but in papers it should be 10^9 1/s, thus the variable should be 0.001*L0)
+variable u equal "0.5*v_L0"                    #*********CHANGE*********#
+variable l equal "-0.5*v_L0"                   #*********CHANGE*********#
+
+variable 0 equal 0.0
+
+
+fix   1 middle nvt temp 300.0 300.0 0.05
+
+
+fix   301 up move variable NULL NULL NULL v_0 v_0 v_u units box
+fix   302 low move variable NULL NULL NULL v_0 v_0 v_l units box
+
+#-----------------------introducing a condition in which whenever the bond between 2 carbon atoms break, the simulation stop      #*********CHANGE*********#
+compute 1 all coord/atom cutoff 2.0  # in dastur vase har atom ye addad taeen mikone ke tedade atom haee hast ke dar shoae cutoff gharar daran.
+fix 	ref middle store/state 0 c_1 # in dastur zakhire mikone etelaate c_1 ro dar avale shabih sazi
+fix 	cur middle store/state 10 c_1 # har 10 step etellate c_1 be ruz mishan
+variable 1 atom "f_ref-f_cur"
+compute 2 middle reduce max v_1 # peida kardan max v_1 beyne kole atom ha
+variable s equal c_2
+
+
+
+
+
+#-------------------------output files--------------------------
+
+fix	        7 all print 10 "${timestep} ${potentialenergy}" file pe_time_elong.txt screen no title "0 0"
+fix			8 all print 100 "${Strain} ${Stress}" file stress_strain.txt screen no title "0 0"
+fix			ssel all print 100 "${Strain} ${Stress}" file stress_strain_el.txt screen no title "0 0"
+fix			9 all print 100 "${Displacement} ${Force}" file force_displacement.txt screen no title "0 0"
+
+#--------------Creating a loop which check the condition if a C-C bond breaks then evaluate the yield stress in sigmas file.
+
+thermo 	100
+thermo_style	custom  step  v_Strain v_Stress pe v_L c_2 v_stop3
+
+fix  store all vector 10 v_Stress   #store all the stress values in a vector to find the maxmimum of them with the variable max command
+label loop
+variable a loop 100000
+run 1000
+Last active /omp style is pair_style airebo/omp
+Neighbor list info ...
+  update every 1 steps, delay 10 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 12.2
+  ghost atom cutoff = 12.2
+  binsize = 6.1, bins = 12 12 29
+  2 neighbor lists, perpetual/occasional/extra = 1 1 0
+  (1) pair airebo/omp, perpetual
+      attributes: full, newton on, ghost, omp
+      pair build: full/bin/ghost/omp
+      stencil: full/ghost/bin/3d
+      bin: standard
+  (2) compute coord/atom, occasional, copy from (1)
+      attributes: full, newton on, omp
+      pair build: copy
+      stencil: none
+      bin: none
+Per MPI rank memory allocation (min/avg/max) = 16.68 | 16.68 | 16.68 Mbytes
+Step v_Strain v_Stress PotEng v_L c_2 v_stop3 
+    5000            0    1.5504703    -4672.874    84.097944            0    40.582149 
+    5100  0.041332306    8.1725131   -4566.9254    87.573905            1      38.4797 
+    5200  0.091940051    9.6774936   -4570.1993    91.829913            2    36.377252 
+    5300   0.13359646    10.943346   -4568.5314    95.333131            2    34.274803 
+    5400   0.18632653    8.6101841    -4574.532    99.767621            2    32.172354 
+    5500   0.23775774    8.1647672    -4573.874    104.09288            2    30.069906 
+    5600   0.28587123    7.5043741   -4580.8205    108.13913            2    27.967457 
+    5700   0.33739113     6.457832   -4584.4817    112.47184            2    25.865009 
+    5800   0.38542384    5.2452008   -4586.9334     116.5113            2     23.76256 
+    5900   0.43570732   0.48639364   -4588.2845    120.74003            2    21.660112 
+    6000   0.48956725   -3.3875255   -4589.2594    125.26954            2    19.557663 
+Loop time of 2.20795 on 6 procs for 1000 steps with 660 atoms
+
+Performance: 19.566 ns/day, 1.227 hours/ns, 452.908 timesteps/s
+414.7% CPU use with 1 MPI tasks x 6 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 1.9265     | 1.9265     | 1.9265     |   0.0 | 87.25
+Neigh   | 0.0097075  | 0.0097075  | 0.0097075  |   0.0 |  0.44
+Comm    | 0.0006282  | 0.0006282  | 0.0006282  |   0.0 |  0.03
+Output  | 0.054361   | 0.054361   | 0.054361   |   0.0 |  2.46
+Modify  | 0.21298    | 0.21298    | 0.21298    |   0.0 |  9.65
+Other   |            | 0.0038     |            |       |  0.17
+
+Nlocal:    660 ave 660 max 660 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+FullNghs:  91102 ave 91102 max 91102 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 91102
+Ave neighs/atom = 138.033
+Neighbor list builds = 31
+Dangerous builds = 0
+if "$s >= 1" then "jump SELF break"
+jump SELF break
+
+
+variable M equal max(f_store)
+print $M file sigmas.txt
+print 10.9433461316848 file sigmas.txt
+10.9433461316848
+
+#--------------Conditions to end the simulation---------------------
+unfix ssel
+fix stop1 all halt 100 tlimit >= 10000   #stoping the simulation when the run time exceeds 2.6 hours
+
+#fix stop2 all halt 100 v_L > 1.175696e+02
+
+#fix stop3 all halt 100 v_stop3 < 5
+
+label loop2
+variable b loop 100000
+run 500
+Last active /omp style is pair_style airebo/omp
+Per MPI rank memory allocation (min/avg/max) = 17.18 | 17.18 | 17.18 Mbytes
+Step v_Strain v_Stress PotEng v_L c_2 v_stop3 
+    6000   0.48956725   -3.3875255   -4589.2594    125.26954            2    19.557663 
+    6100   0.53804561   -5.1905668   -4590.8222    129.34647            2    17.455214 
+    6200    0.5897749   -5.3149521   -4589.2592     133.6968            2    15.352766 
+    6300   0.63702686   -5.0108261   -4587.9634    137.67059            2    13.250317 
+    6400   0.69053345   -6.0897965   -4588.5385    142.17039            2    11.147869 
+    6500   0.73619863   -6.4379479   -4589.1066    146.01073            2      9.04542 
+Loop time of 1.21961 on 6 procs for 500 steps with 660 atoms
+
+Performance: 17.711 ns/day, 1.355 hours/ns, 409.967 timesteps/s
+399.7% CPU use with 1 MPI tasks x 6 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 1.0669     | 1.0669     | 1.0669     |   0.0 | 87.48
+Neigh   | 0.0051738  | 0.0051738  | 0.0051738  |   0.0 |  0.42
+Comm    | 0.0005914  | 0.0005914  | 0.0005914  |   0.0 |  0.05
+Output  | 0.027015   | 0.027015   | 0.027015   |   0.0 |  2.22
+Modify  | 0.11748    | 0.11748    | 0.11748    |   0.0 |  9.63
+Other   |            | 0.002488   |            |       |  0.20
+
+Nlocal:    660 ave 660 max 660 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    51 ave 51 max 51 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+FullNghs:  91484 ave 91484 max 91484 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 91484
+Ave neighs/atom = 138.612
+Neighbor list builds = 14
+Dangerous builds = 0
+if "${Stress} <= 0.0 || ${stop3} < 5" then "jump SELF break2"
+jump SELF break2
+# ------------------------- END ---------------------------------
+Total wall time: 0:00:16

@@ -1,0 +1,182 @@
+#input file for Optimization of CCNT structures
+
+units		metal
+dimension	3
+boundary	f f p
+atom_style	atomic
+atom_modify   map array
+# ----------------------- ATOM AND GROUP DEFINITION ----------------------------
+read_data	data.cnt
+
+mass		1 12.01115
+
+#creating the upper group
+variable 	zmid equal xcm(all,z) #evaluating the z coordinate of the center of mass of the all atoms
+variable    zu atom "z>v_zmid" #atoms that their z coordinates are bigger than mid
+group       upz variable zu # now all those atoms are in the group "upz"
+
+variable	idu equal 0.906*atoms
+variable    idup atom "id>v_idu" #atoms that their ID is bigger than .906*ntot
+group       upid variable idup # now all those atoms are in the group 
+
+group		up intersect upz upid
+
+
+#creating the lower group
+variable    zl atom "z<v_zmid" #atoms that their z coordinates are smaller than mid
+group       lowz variable zl # now all those atoms are in the group "lowz"
+
+variable	idl equal 0.805*atoms
+variable    idlow atom "id>v_idl" #atoms that their ID is bigger than .805*ntot
+group       lowid variable idlow # now all those atoms are in the group 
+
+group		low intersect lowz lowid
+
+
+#creating the middle group
+
+group		middle subtract all up low
+variable	n equal count(middle)
+
+# ------------------------ FORCE FIELDS ------------------------------
+pair_style   airebo 3.0
+pair_coeff   * * CH.airebo C
+
+ 
+# ------------------------- SETTINGS ---------------------------------
+timestep   0.0005
+run_style verlet
+
+#--------------------------RELAXATION---------------------------------
+variable	timestep  equal "step"
+variable	potentialenergy  equal "pe"
+variable    V0 equal "8.9*v_n" 
+
+#computing the length of the ccnt during the simulation
+compute		max middle reduce max z
+compute		min middle reduce min z
+variable    L equal "c_max-c_min"
+
+#computing the max z for halt 3
+
+compute		maxz all reduce max z
+
+variable zhi equal 8.147564e+01
+
+variable stop3 equal "v_zhi-c_maxz"
+
+fix   1 all npt temp  300 300 0.05 z 0 0 0.5
+fix   2 up setforce 0.0 0.0 0.0
+fix   3 low setforce 0.0 0.0 0.0
+
+
+
+thermo 	100
+thermo_style	custom  step v_L  pe temp v_n
+
+#-------------------------computing stress--------------------
+compute     Sz middle stress/atom NULL virial
+fix			S middle ave/atom 10 1 10 c_Sz[3] 
+compute		Szz middle reduce sum f_S
+
+variable	Stress equal "c_Szz/(10000*v_V0)"
+
+#coloring atoms regarding their stress
+compute     stressperatom middle stress/atom NULL
+variable    color atom "c_stressperatom[3]/89000"
+
+
+fix   4 all print 10 "${timestep} ${potentialenergy}" file pe_time_relaxation.txt screen no
+#dump  1 all custom 100 dump.lammpstrj id type x y z v_color
+dump  1 all custom/gz 100 dump.gz id type x y z v_color
+
+run		5000
+
+
+unfix 1
+unfix 2
+unfix 3
+unfix 4
+
+
+variable	L0 equal $L
+variable	Strain equal "(v_L-v_L0)/v_L0"
+
+
+#-----------------------Calculation Force-Displacment----------------------
+
+compute     force up property/atom fx fy fz
+fix         6 all ave/atom 10 10 100 c_force[3]
+compute     fz3 up reduce sum f_6
+variable    Force  equal "c_fz3*(-1.602)"
+
+variable	Displacement  equal "(v_L-v_L0)/10"
+
+#emposing force that produce a strain rate of 10^10 1/s (but in papers it should be 10^9 1/s, thus the variable should be 0.001*L0)
+variable u equal "0.01*v_L0"                    #*********CHANGE*********#
+variable l equal "-0.01*v_L0"                   #*********CHANGE*********#
+
+variable 0 equal 0.0
+
+
+fix   1 middle nvt temp 300.0 300.0 0.05
+
+
+fix   301 up move variable NULL NULL NULL v_0 v_0 v_u units box        
+fix   302 low move variable NULL NULL NULL v_0 v_0 v_l units box
+
+#-----------------------introducing a condition in which whenever the bond between 2 carbon atoms break, the simulation stop      #*********CHANGE*********#
+compute 1 all coord/atom cutoff 2.0  # in dastur vase har atom ye addad taeen mikone ke tedade atom haee hast ke dar shoae cutoff gharar daran.
+fix 	ref middle store/state 0 c_1 # in dastur zakhire mikone etelaate c_1 ro dar avale shabih sazi
+fix 	cur middle store/state 10 c_1 # har 10 step etellate c_1 be ruz mishan
+variable 1 atom "f_ref-f_cur"
+compute 2 middle reduce max v_1 # peida kardan max v_1 beyne kole atom ha
+variable s equal c_2
+
+
+
+
+
+#-------------------------output files--------------------------
+
+fix	        7 all print 10 "${timestep} ${potentialenergy}" file pe_time_elong.txt screen no title "0 0"
+fix			8 all print 100 "${Strain} ${Stress}" file stress_strain.txt screen no title "0 0"
+fix			ssel all print 100 "${Strain} ${Stress}" file stress_strain_el.txt screen no title "0 0"
+fix			9 all print 100 "${Displacement} ${Force}" file force_displacement.txt screen no title "0 0"
+
+#--------------Creating a loop which check the condition if a C-C bond breaks then evaluate the yield stress in sigmas file.
+
+thermo 	100
+thermo_style	custom  step  v_Strain v_Stress pe v_L c_2 v_stop3
+
+fix  store all vector 10 v_Stress   #store all the stress values in a vector to find the maxmimum of them with the variable max command
+label loop
+variable a loop 100000
+run 1000
+if "$s >= 1" then &
+"jump SELF break"
+next a
+jump SELF loop
+label break
+
+
+variable M equal max(f_store)
+print $M file sigmas.txt
+
+#--------------Conditions to end the simulation---------------------
+unfix ssel
+fix stop1 all halt 100 tlimit >= 10000   #stoping the simulation when the run time exceeds 2.6 hours
+
+#fix stop2 all halt 100 v_L > 1.175696e+02
+
+#fix stop3 all halt 100 v_stop3 < 5
+
+label loop2
+variable b loop 100000
+run 500
+if "${Stress} <= 0.0 || ${stop3} < 5" then &
+"jump SELF break2"
+next b
+jump SELF loop2
+label break2
+# ------------------------- END ---------------------------------

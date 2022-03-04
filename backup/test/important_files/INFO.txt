@@ -1,0 +1,15 @@
+The number of data are as follow:
+
+Elastic
+	large: 1150
+	mix: 3031
+	small: 1775 (1178 unique from mix)
+	taken from plastic run (unique from all the above data): 4022
+Plastic
+	total: 5617
+
+
+The pop#_.... are files with raw data from optimization
+The data_... are processed data with parameters and ready for ML uses
+
+All data are in csv files
