@@ -17,7 +17,7 @@ def nsga(R_input, theta_input, D_input):
     
     class MyProblem(Problem):
         def __init__(self):
-            super().__init__(n_var=6, n_obj=3, n_constr=0, xl=1, xu=3, type_var=int, ElementwiseProblem = False)
+            super().__init__(n_var=6, n_obj=3, n_constr=0, xl=1, xu=8, type_var=int, ElementwiseProblem = False)
         def _evaluate(self, x, out, *args, **kwargs):
             x = x.tolist()
             x = matlab.double(x)
@@ -32,8 +32,8 @@ def nsga(R_input, theta_input, D_input):
     problem = MyProblem()
     #problem = get_problem("bnh")
     method = NSGA2(
-        pop_size=10, # 40
-        n_offsprings=8, # 30
+        pop_size=40,
+        n_offsprings=30,
         sampling=get_sampling("int_random"),
         crossover=get_crossover("int_sbx", prob=0.9, eta=15),
         mutation=get_mutation("int_pm", eta=20),
@@ -43,7 +43,7 @@ def nsga(R_input, theta_input, D_input):
     
     res = minimize(problem,
                    method,
-                   termination=('n_gen', 10), #put it 100
+                   termination=('n_gen', 100),
                    seed=1,
                    save_history=True,
                    verbose=True

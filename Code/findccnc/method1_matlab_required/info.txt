@@ -1,3 +1,0 @@
-hproblem is we have a numpy array (40 * 6 ) but matlab needs a matrix of the same size, how can we change numpy array to an input that matlab knows as a matrix
-
-https://www.mathworks.com/help/matlab/matlab_external/matlab-arrays-as-python-variables.html

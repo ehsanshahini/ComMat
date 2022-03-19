@@ -1,9 +1,11 @@
-%function [radius, pitchangle, diameter]=helix(type,index1,index2,index3,index4,shift)
 try
 clear;
-index=[ 2 2 2 2 0 0];
- type=2;
- shift=2;
+Input = [4 2 2 2 1 3]; % Change this to get different CNCs, for explanation of these indices refer to the main paper
+
+
+index=[ Input(1) Input(2) Input(3) Input(4) 0 0];
+ type=Input(5);
+ shift=Input(6);
 ncell=15; % number of unit cells of the output
 
 
